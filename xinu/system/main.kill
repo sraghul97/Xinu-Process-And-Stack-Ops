@@ -1,0 +1,100 @@
+/*  main.c  - main */
+
+#include <xinu.h>
+#include <stdarg.h>
+
+pid32 pid1a, pid1b, pid1c, pid2a, pid2b, pid2c, pid2d;
+
+process test1(void);
+process test2(void);
+process test3(void);
+
+void sync_printf(char *fmt, ...)
+{
+    intmask mask = disable();
+	
+    void *arg = __builtin_apply_args();
+	__builtin_apply((void*)kprintf, arg, 100);
+	restore(mask);
+}
+
+void sync_print_process_tree()
+{
+    struct procent *prptr;
+    int i,ii;
+	
+	intmask mask = disable();
+
+    for(i= 0; i<NPROC; i++)
+    {
+        prptr = &proctab[i];
+        if (prptr->prstate != PR_FREE)
+        {
+            kprintf("\n Children of PID #%d -> ", i);
+		    for(ii = 1; ii< NPROC; ii++)
+            {
+                prptr = &proctab[ii];
+                if ((prptr->prstate != PR_FREE) && ((prptr->prparent) == i)) 
+                {
+				    kprintf("%d    ", ii);   
+                }
+            }       
+        }
+    }
+    restore(mask);
+}
+
+process test1()
+{
+	pid1a = create((void *)test2, 8192, 50, "test2", 0, NULL);
+	pid1b = create((void *)test2, 8192, 50, "test2", 0, NULL);
+	pid1c = create((void *)test2, 8192, 50, "test2", 0, NULL);
+	resume(pid1a);
+	resume(pid1b);
+	resume(pid1c);
+	
+	sleep(50);
+	return OK;
+}
+
+process test2(void)
+{
+	pid2a = create((void *)test3, 8192, 50, "test3", 0, NULL);	
+	pid2b = create((void *)test3, 8192, 50, "test3", 0, NULL);	
+	pid2c = create((void *)test3, 8192, 50, "test3", 0, NULL);	
+	pid2d = create((void *)test3, 8192, 50, "test3", 0, NULL);
+		
+	sleep(50);
+	return OK;
+}
+
+process test3(void)
+{	
+	return OK;
+}
+
+process	main(void)
+{
+	pid32 pid;
+
+	pid = create((void *)test1, 8192, 50, "test1", 0, NULL);
+	resume(pid);
+
+	sync_printf("\n \n-----Process Tree before killing process #%d (No Children)-----",pid2a);
+	sync_print_process_tree();
+	kill(pid2a);
+	
+	/* kill a process with children */
+	sync_printf("\n \n-----Process Tree after killing process #%d (No Children) & before killing process #%d (Has Children)-----", pid2a, pid1a);
+	sync_print_process_tree();
+	kill(pid1a);
+	
+	/* kill a process with children and grandchildren*/
+	sync_printf("\n \n-----Process Tree after killing process #%d (Has Children) & before killing process #%d (Has Children and Grand Children)-----", pid1a, pid);
+	sync_print_process_tree();
+	kill(pid);
+	sync_printf("\n \n-----Process Tree after killing process #%d (Has Children and Grand Children)-----", pid);
+	sync_print_process_tree();
+		
+	return OK;
+}
